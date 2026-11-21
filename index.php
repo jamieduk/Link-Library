@@ -99,6 +99,45 @@
 }
 
 
+  /* Clear-all confirmation modal */
+  .modal {
+    width: min(430px, calc(100% - 32px));
+    margin: auto;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    box-shadow: 0 24px 80px #0009;
+    opacity: 0;
+    transform: translateY(8px) scale(.98);
+    transition: opacity .18s ease, transform .18s ease, overlay .18s allow-discrete, display .18s allow-discrete;
+  }
+  .modal[open] { opacity: 1; transform: none; }
+  @starting-style { .modal[open] { opacity: 0; transform: translateY(8px) scale(.98); } }
+  .modal:modal { overscroll-behavior: contain; }
+  .modal::backdrop {
+    overflow: hidden;
+    overscroll-behavior: contain;
+    background: #050608b8;
+    backdrop-filter: blur(3px);
+    opacity: 0;
+    transition: opacity .18s ease, overlay .18s allow-discrete, display .18s allow-discrete;
+  }
+  .modal[open]::backdrop { opacity: 1; }
+  @starting-style { .modal[open]::backdrop { opacity: 0; } }
+  .modal-card { padding: 24px; }
+  .modal h2 { margin: 0 0 8px; font-size: 1.25rem; letter-spacing: -.02em; }
+  .modal p { margin: 0 0 20px; color: var(--muted); }
+  .modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+  .modal-actions button { min-width: 96px; }
+  .modal-confirm { color: #240a0a; background: var(--danger); border-color: var(--danger); font-weight: 700; }
+  .modal-actions button:focus-visible { outline: 2px solid #8cdda0; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .modal, .modal::backdrop { transition: none; }
+  }
+
   /* Matrix screensaver layer */
   #matrix {
     position: fixed; inset: 0; width: 100%; height: 100%;
@@ -143,6 +182,17 @@
 
   <p class="footer">Saved in this browser on this device. Green links turn grey after you open them.</p>
 </main>
+
+<dialog id="clearDialog" class="modal" closedby="any" aria-labelledby="clearTitle" aria-describedby="clearDesc">
+  <form method="dialog" class="modal-card">
+    <h2 id="clearTitle">Are you sure?</h2>
+    <p id="clearDesc">This will permanently remove all your saved links.</p>
+    <div class="modal-actions">
+      <button value="cancel" class="modal-cancel" autofocus>Cancel</button>
+      <button value="confirm" class="modal-confirm">Yes!</button>
+    </div>
+  </form>
+</dialog>
 
 <!-- Matrix screensaver canvas; the Link Library content stays underneath -->
 <canvas id="matrix" aria-hidden="true"></canvas>
@@ -243,15 +293,30 @@
     input.value='';
     status.textContent=`Added ${added}; skipped ${duplicates} duplicate${duplicates === 1 ? '' : 's'}${invalid ? `; ignored ${invalid} invalid line${invalid === 1 ? '' : 's'}` : ''}.`;
   });
+  const clearDialog=document.getElementById('clearDialog');
+  const clearDesc=document.getElementById('clearDesc');
   document.getElementById('clearBtn').addEventListener('click', () => {
     if (!links.length) { status.textContent='There are no links to clear.'; return; }
-    if (confirm(`Clear all ${links.length} saved links? This cannot be undone.`)) {
-      links=[];
-      visited=new Set();
-      save(); render();
-      status.textContent='All links cleared.';
-    }
+    clearDesc.textContent=`This will permanently remove all ${links.length} saved link${links.length === 1 ? '' : 's'}. This cannot be undone.`;
+    clearDialog.showModal();
   });
+  clearDialog.addEventListener('close', () => {
+    const confirmed=clearDialog.returnValue === 'confirm';
+    clearDialog.returnValue='';
+    if (!confirmed) return;
+    links=[];
+    visited=new Set();
+    save(); render();
+    status.textContent='All links cleared.';
+  });
+  if (!('closedBy' in HTMLDialogElement.prototype)) {
+    clearDialog.addEventListener('click', (event) => {
+      if (event.target !== clearDialog) return;
+      const rect=clearDialog.getBoundingClientRect();
+      const inContent=event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      if (!inContent) clearDialog.close();
+    });
+  }
   document.getElementById('sortBtn').addEventListener('click', () => {
     links.sort((a, b) => labelFor(a).localeCompare(labelFor(b)));
     save(); render();
